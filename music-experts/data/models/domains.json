@@ -1,0 +1,20 @@
+{
+  "_author": "Adam Skrodzki",
+  "_comment": "Domena każdego checkpointu (co przeszło do korpusu przy prepare_data.py). Domena = filtr melodii z tunes.csv: 'type' to substring typu, 'meter' równość. null = model spoza zakresu benchmarku (brak dopasowanych melodii).",
+  "bach_ckpt.pt":      {"type": null, "meter": null},
+  "jig_ckpt.pt":       {"type": "jig", "meter": "6/8"},
+  "jig_v2_ckpt.pt":    {"type": "jig", "meter": "6/8"},
+  "jig_e32_s1_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_e32_s2_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_e32_s3_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_e64_s3_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_e128_s3_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_e192_s3_ckpt.pt": {"type": "jig", "meter": "6/8"},
+  "jig_l1_ckpt.pt":    {"type": "jig", "meter": "6/8"},
+  "jig_l2_ckpt.pt":    {"type": "jig", "meter": "6/8"},
+  "jig_s1_ckpt.pt":    {"type": "jig", "meter": "6/8"},
+  "jig_s2_ckpt.pt":    {"type": "jig", "meter": "6/8"},
+  "reel_ckpt.pt":      {"type": "reel", "meter": "4/4"},
+  "reel_sv_ckpt.pt":   {"type": "reel", "meter": "4/4"},
+  "waltz_ckpt.pt":     {"type": "waltz", "meter": "3/4"}
+}

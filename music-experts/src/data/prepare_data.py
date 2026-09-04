@@ -3,34 +3,15 @@ Filtr: typ + metrum z argumentów (domyślnie jigi 6/8). Buduje grające bloki A
 Użycie: python src/data/prepare_data.py [typ] [metrum] [wyjście]
   np. python src/data/prepare_data.py waltz 3/4 data/corpus/waltz.abc
 """
-import csv, re, sys, os
+import csv, sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.abc_corpus import ALLOWED, clean_abc, norm_key
+
 csv.field_size_limit(10**7)
 
 TYPE_KW = sys.argv[1] if len(sys.argv) > 1 else "jig"
 METER   = sys.argv[2] if len(sys.argv) > 2 else "6/8"
 OUT     = sys.argv[3] if len(sys.argv) > 3 else "data/jigs.abc"
-
-MODE_TABLE = {
-    "major": "", "ionian": "", "minor": "min", "aeolian": "min",
-    "dorian": "dor", "mixolydian": "mix", "phrygian": "phr",
-    "lydian": "lyd", "locrian": "loc", "": "",
-}
-
-def norm_key(mode: str) -> str:
-    m = re.match(r"^([A-Ga-g][#b]?)(.*)$", mode.strip())
-    if not m:
-        return "C"
-    root, word = m.group(1), m.group(2).lower()
-    return root + MODE_TABLE.get(word, "")
-
-ALLOWED = set("ABCDEFGabcdefg0123456789|:[]()<>/'^_=.,~- zZxX")
-
-def clean_abc(body: str) -> str:
-    body = body.replace("\r\n", "\n").replace("\r", "\n").strip()
-    body = re.sub(r'"[^"]*"', "", body)       # usuń symbole akordów / adnotacje "..."
-    body = re.sub(r"[ \t]+", " ", body)        # scal podwójne spacje po usunięciu
-    body = re.sub(r"\n+", "\n", body)
-    return body
 
 def main():
     rows_out, n_total, n_kept = [], 0, 0
