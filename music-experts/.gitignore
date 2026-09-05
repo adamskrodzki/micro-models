@@ -6,7 +6,7 @@ __pycache__/
 # są regenerowalne, więc NIE idą. Idą tylko wytrenowane MODELE (wagi).
 data/*
 out/*
-!data/models
+data/models
 data/models/*
 !data/models/*.pt
 data/models/gpt_ckpt_v1_dirty.pt

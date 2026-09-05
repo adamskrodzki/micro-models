@@ -22,6 +22,7 @@
   "reel_sh_ckpt.pt":  {"type": "reel",  "meter": "4/4", "_note": "teacher RKL, wspolny slownik (VOCAB_FROM=universalist)"},
   "waltz_sh_ckpt.pt": {"type": "waltz", "meter": "3/4", "_note": "teacher RKL, wspolny slownik (VOCAB_FROM=universalist)"},
   "student_rkl_ckpt.pt": {"type": "jig", "meter": "6/8", "_note": "domena arbitralna (student po RKL); j.w."},
+  "student_junk_rkl_sc_ckpt.pt": {"type": "jig", "meter": "6/8", "_note": "domena arbitralna (student po RKL); j.w."},
   "student_rkl_last_ckpt.pt": {"type": "jig", "meter": "6/8", "_note": "domena arbitralna (student po RKL, last); j.w."},
   "student_rkl_sc_ckpt.pt": {"type": "jig", "meter": "6/8", "_note": "domena arbitralna (student po RKL cont+scratch); j.w."},
   "student_rkl_sc_last_ckpt.pt": {"type": "jig", "meter": "6/8", "_note": "domena arbitralna (student po RKL cont+scratch, last); j.w."},
