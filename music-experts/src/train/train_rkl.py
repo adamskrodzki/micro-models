@@ -1,21 +1,26 @@
 # Autor: Adam Skrodzki
-"""On-policy destylacja: KL student↔rotujący nauczyciel na zadaniu continuation.
+"""On-policy destylacja: KL student↔rotujący nauczyciel (continuation + scratch).
 
-Student generuje kontynuacje z promptów domeny-nauczyciela (temp/topk jak w benchmarku),
-nauczyciel kompotentny w tej domenie ocenia wygenerowane znaki, a strata to per-token
-KL między rozkładami studenta i nauczyciela w każdym oknie block_size (konwencja okien
-jak u sędziego). Nauczyciel nigdy nie widzi surowych danych innej domeny niż jego własna
-— student uczy się „second-hand", z samych prawdopodobieństw.
+Student generuje rollouty z promptów domeny-nauczyciela (temp/topk jak w benchmarku),
+nauczyciel kompetentny w tej domenie ocenia wygenerowane znaki, a strata to per-token
+KL między rozkładami studenta i nauczyciela — tylko na WYGENEROWANYCH pozycjach, liczone
+w oknach 128, gdzie pierwsze 32 znaki okna to tylko kontekst (nauczyciel
+i student przewidują z prawdziwego prefixu, nie z amputowanego środka melodii).
+Nauczyciel nigdy nie widzi surowych danych innej domeny niż jego własna — student
+uczy się „z drugiej ręki", z samych prawdopodobieństw.
 
-α-mixing: p_mix = (1−α)·p_teacher + α/|V| — kalibracja na niewytrenowanym supportie
-nauczyciela (znaki spoza jego korpusu mają losowe logity po weight-tyingu) + ograniczenie
-gradientów tam, gdzie nauczyciel jest pewny, a student generuje śmieci.
+α-mixing: p_mix = (1−α)·p_teacher + α/|V|, |V| = rozmiar wspólnego słownika (54).
+Podłoga prawdopodobieństwa α/|V| na każdym znaku — kalibracja na niewytrenowanym
+supportie nauczyciela (znaki spoza jego korpusu mają losowe logity po weight-tyingu)
++ ograniczenie gradientów tam, gdzie nauczyciel jest pewny, a student generuje śmieci.
+Koszt: lekkie ściągnięcie ku uniform — entropia generacji jest metryką kontrolną.
 
 Wspólny słownik: student i wszyscy nauczyciele muszą mieć identyczny zbiór znaków
-(assert). Rotacja PER BATCH: domena (równo jig→reel→waltz) × zadanie (continuation/
-scratch — scratch koryguje regresję scratch zaobserwowaną w benchmarku po treningu
-tylko na continuation). Ewaluacja: KL/entropia/log-prob nauczyciela na utwalonej puli
-val per domena i zadanie; best ckpt = najniższa średnia KL.
+(assert). Rotacja PER BATCH: domena (równo jig→reel→waltz) × zadanie (continuation:
+prompt o STAŁEJ długości 96 znaków = nagłówki + prefiks ciała; scratch: same nagłówki,
+batch z jednego kubełka długości nagłówka). Ewaluacja co eval_interval: KL / entropia /
+log-prob nauczyciela na utwalonej puli val per domena i zadanie. Zapisywane oba
+checkpointy: best (min val KL — słabo skorelowany z jakością benchmarkową) i last.
 
 Użycie:
   python src/train/train_rkl.py \
@@ -49,7 +54,7 @@ def build_prompt(row, task, total):
 def window_loss(seq, plen, student, teacher, t2s, alpha, direction, ctx, device, ctx_chars=32):
     """KL per-token na wygenerowanych pozycjach sekwencji (B, L). Okna ze stride: pierwsze
     ctx_chars znaków okna (poza pierwszym) to tylko KONTEKST — nauczyciel i student
-    przewidują z prawdziwego poprzedzenia, nie z amputowanego środka melodii.
+    przewidują z prawdziwego prefixu.
     Zwraca (loss, mean_log_p_mix_na_sample, mean_entropia_studenta, n_pozycji).
     Statystyki per POZYCJA per SEKWENCJA (licznik n uwzględnia batch)."""
     B = seq.size(0)

@@ -166,6 +166,12 @@ zapadały:
 5. **Uwaga metodologiczna: best-by-KL słabo skorelowany z jakością benchmarkową** —
    `last` był lepszy na komórkach istotnych (scratch) mimo wyższego val KL; oba
    checkpointy zapisywane od tej pory.
+6. **Ablacja: start z eksperta zamiast z universalisty.** Pytanie: ile wyniku bierze się
+   z faktu, że universalista widział wszystkie domeny PRZED RKL? Start: `jig_sh` (specjalista,
+   nigdy nie widział reel/waltz na żadnym etapie) + ci sami trzej nauczyciele, ten sam
+   budżet (`student_jigstart_*`). Przebieg zdrowy (KL 0.146, entropia stabilna); reel
+   domykał się najwolniej (KL 0.32 vs 0.065 waltz). Benchmark patrz tabela ablacji
+   w Wynikach.
 
 ## Wyniki (judge_v2, seed 42; ref: jig 0.799 / reel 0.766 / waltz 0.544)
 
@@ -183,11 +189,32 @@ Macierz OOD, komórka = `scratch` / `continuation`:
 (off-diagonal nauczycieli z `ood_teachers_*.log`; checkpoint continuation-only usunięty
 przy sprzątaniu — liczby z logu `ood_student_rkl_*.log`)
 
+### Ablacja: universalist-start vs specialist-start
+
+Ten sam trening (B), inny punkt startowy — student nigdy nie widzący reel/waltz
+na żadnym etapie (`student_jigstart_last`, log `ood_jigstart_*.log`):
+
+| komórka (scr / cont) | universalist | RKL uni-start | **RKL jig-start** | jig_sh (init/nauczyciel) |
+|---|---|---|---|---|
+| jig | 0.52 / 0.62 | 0.62 / 0.66 | 0.60 / 0.63 | 0.62 / 0.70 |
+| reel | 0.48 / 0.52 | 0.53 / 0.57 | 0.39 / 0.53 | 0.15 / 0.31 |
+| waltz | 0.20 / 0.29 | 0.54 / 0.43 | 0.55 / 0.44 | 0.14 / 0.22 |
+
+Wniosek z ablacji: **pre-RKL ekspozycja na dane wszystkich domen wnosi niemal nic** —
+waltz i reel-continuation identyczne między startami; jedyna różnica to reel scratch
+(0.39 vs 0.53), czyli tryb, w którym model musi wygenerować cały styl z samego priora,
+bez melodicznego zakotwiczenia — dokładnie tam pierwszy kontakt z prawdziwymi danymi
+pomaga, a nadzór prawdopodobieństwami najmniej. Dodatkowo: rigidity specjalisty jest
+w pełni zdejmowalna (hb 0.94 → 0.04–0.25), a cena za domyk w dwóch obcych domenach to
+lekki spadek w domenie własnej (jig 0.63 vs 0.70 nauczyciela w continuation).
+
 **Wnioski:**
 
-1. **Second-hand działa**: student po RKL zbliża się do każdego specjalisty na jego
-   własnej przekątnej (0.02–0.04), trenowany w fazie RKL tylko na prawdopodobieństwach
-   nauczycieli — bez surowych danych ich domen.
+1. **Second-hand działa — i to prawie w całości**: student po RKL zbliża się do każdego
+   specjalisty na jego własnej przekątnej (0.02–0.04), trenowany w fazie RKL tylko na
+   prawdopodobieństwach nauczycieli; ablacja (start z eksperta bez kontaktu z danymi
+   reel/waltz w ogóle) pokazuje, że pre-RKL ekspozycja universalisty wnosi wyłącznie
+   ~0.14 na komórce reel scratch.
 2. **Waltz: 0.20→0.54 scratch** — sufit sędziego (0.544), poziom własnego nauczyciela
    (0.53). Najmniejsza domena (pula 348) domknięta.
 3. **Pareto-dominacja nad universalistą** w każdej komórce — brak kosztu zapominania;

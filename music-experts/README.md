@@ -72,7 +72,7 @@ python src/tools/benchmark_ood.py                     # expert × domain transfe
 ```
 
 Full WHY / HOW / WHAT, results and limitations (in Polish):
-[docs/Judge-Sedzia-Generacji.md](docs/Judge-Sedzia-Generacji.md)
+[docs/Badania/2026-09-05_posttraining-reverse-kl/Judge-Sedzia-Generacji.md](docs/Badania/2026-09-05_posttraining-reverse-kl/Judge-Sedzia-Generacji.md)
 
 ## Pipeline (`src/`)
 `prepare_data.py` / `prepare_bach.py` (build ABC corpus) → `gpt.py` (architecture) → `train_gpt.py`
