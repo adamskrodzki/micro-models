@@ -230,3 +230,31 @@ lekki spadek w domenie własnej (jig 0.63 vs 0.70 nauczyciela w continuation).
 **Otwarte:** forward KL (`--direction forward`) — izolacja kierunku KL; off-policy
 distillation (nauczyciel na prawdziwych sekwencjach) — izolacja on-policy; sensitivity
 α i top-k; odtworzenie checkpointu continuation-only dla pełnej tabeli abacyjnej.
+
+**Zastrzeżenie (leak generatory↔val sędziego):** sędzia nie wycieka do treningu w żadnej
+formie (w `train_rkl.py` z `train_judge` importowane są tylko narzędzia danych; sygnał
+treningowy to wyłącznie rozkłady nauczycieli; pule promptów RKL z splitu TRENINGOWEGO).
+Ale generatory (universalista, nauczyciele `_sh`) trenowały na pełnym `tunes.csv`,
+w tym na melodiach z walidacyjnego splitu sędziego — benchmark może więc mierzyć częściowo
+zapamiętywanie (najbardziej continuation: prompt = ćwiartka ciała melodii walidacyjnej;
+najmniej scratch). Wyciek wspólny dla wszystkich porównywanych modeli, więc wnioski
+relatywne (RKL vs universalista, uni-start vs jig-start) pozostają w mocy; wartości
+absolutne traktować jako optymistyczne. Clean-room wariant i szczegóły: [[Judge-Sedzia-Generacji]],
+sekcja „Zastrzeżenie: split chroni sędziego, ale nie generatory".
+
+### Konsekwencje: co zostaje, a co nie
+
+Wyciek działa jak stała dopłatka do wyników każdego generatora, więc:
+
+- **Porównania (różnice) zostają**: RKL vs universalista, uni-start vs jig-start,
+  nauczyciel vs student — wszystkie modele dziedziczą ten sam nadmiar informacji,
+  więc różnice między nimi mierzą realny efekt interwencji, nie wyciek.
+- **Ratia score/ref zostają**: sufit (`ref`) liczony na prawdziwych melodiach jest
+  niewrażliwy na zapamiętywanie przez generatory; normalizacja sufitem częściowo
+  usuwa wspólną dopłatkę.
+- **Wartości absolutne nie zostają**: score 0.54 na waltz to górne oszacowanie —
+  część tej liczby to odtworzenie zapamiętanych ciał, nie opanowanie stylu.
+- **Granica zaufania**: dopłatka nie musi być identyczna między modelami (pojemność
+  i liczba epok na korpusie z wyciekiem różnią się między checkpointami) — wnioski
+  oparte na dużych lukach (≥0.1, np. waltz 0.20→0.54) są bezpieczne; porównania na
+  granicy szumu (±0.03–0.05) przy wycieku tracą jeszcze trochę wiarygodności.

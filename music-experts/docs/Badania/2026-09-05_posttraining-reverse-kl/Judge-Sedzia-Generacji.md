@@ -91,6 +91,22 @@ Kluczowe decyzje projektowe:
   csv) niemal identycznych. Losowy split po wierszach przeciekałby (copypasta w val),
   split po `tune_id` gwarantuje, że val to melodie, których sędzia nigdy nie widział.
 
+### Zastrzeżenie: split chroni sędziego, ale nie generatory
+
+Split po `tune_id` gwarantuje czystość walidacji **sędziego**. Generatory (eksperci,
+universalista, nauczyciele `_sh`) są trenowane na korpusach z `prepare_data.py`, które
+biorą CAŁY `tunes.csv` — w tym melodie z val splitu sędziego. Sędzia nie wycieka do
+treningu generatorów (żaden generator nie widzi jego wyjść ani wag), ale generator mógł
+zapamiętać surowy tekst melodii walidacyjnych. Konsekwencje:
+
+- **Porównania międzymodelami są uczciwe** — wyciek jest wspólny dla wszystkich
+  benchmarkowanych generatorów (eksperci, universalista, studenci RKL).
+- **Wartości absolutne są optymistyczne** — continuation jest najbardziej narażony
+  (prompt = ćwiartka ciała melodii walidacyjnej, którą generator mógł zapamiętać),
+  scratch najmniej (same nagłówki). Sufit (`ref`) jest niewrażliwy.
+- **Clean-room wariant** (dla paperu): `prepare_data.py` z wykluczeniem val `tune_id`
+  splitu sędziego + przetrenowanie wszystkiego.
+
 ### Wyniki
 
 | głowa | val acc (judge_v2) | baseline (klasa większościowa) | interpretacja |
