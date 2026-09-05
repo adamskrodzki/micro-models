@@ -1,4 +1,3 @@
-# Autor: Adam Skrodzki
 """Wspólne narzędzia czyszczenia ABC (używane przez prepare_data.py i judge).
 Przeniesione 1:1 z prepare_data.py + parser ciała melodii dla judge'a.
 """
