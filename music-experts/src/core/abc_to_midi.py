@@ -18,14 +18,29 @@ def sanitize(abc: str) -> str:
         out.append(b)
     return "\n".join(out)
 
+def parse_abc(abc: str, sanitize_input: bool = False):
+    """Parse ABC into a music21 score.
+
+    By default the input is passed to music21 unchanged.  Callers that want the
+    historical repair behavior can opt in with ``sanitize_input=True``.
+    Parser errors intentionally propagate to the caller so strict validation can
+    distinguish them from renderer failures.
+    """
+    source = sanitize(abc) if sanitize_input else abc
+    return converter.parse(source, format="abc")
+
+def render_score(score, output_path: str, inst=None) -> None:
+    """Render a parsed score to MIDI using the historical flattening logic."""
+    # spłaszcz do samych nut/pauz (omija konflikt TimeSignature przy budowie taktów)
+    notes = score.flatten().notesAndRests.stream()
+    if inst is not None:                  # ustaw instrument (np. Violin); domyślnie fortepian (GM 0)
+        notes.insert(0, inst)
+    notes.write("midi", fp=output_path)
+
 def to_midi(abc: str, out_path: str, inst=None) -> bool:
     try:
-        score = converter.parse(sanitize(abc), format="abc")
-        # spłaszcz do samych nut/pauz (omija konflikt TimeSignature przy budowie taktów)
-        notes = score.flatten().notesAndRests.stream()
-        if inst is not None:                  # ustaw instrument (np. Violin); domyślnie fortepian (GM 0)
-            notes.insert(0, inst)
-        notes.write("midi", fp=out_path)
+        score = parse_abc(abc, sanitize_input=True)
+        render_score(score, out_path, inst=inst)
         return True
     except Exception as e:
         print(f"  [pominięto] {out_path}: {type(e).__name__}: {e}")

@@ -11,7 +11,8 @@ repo_github: "https://github.com/adamskrodzki/micro-models"
 
 # Posttraining: reverse KL z rotującym nauczycielem (eksperyment E-RKL)
 
-Status: ZREALIZOWANY (iteracja 2: continuation+scratch, α=0.1, reverse). Wyniki niżej.
+Status: ZREALIZOWANY (iteracja 2: continuation+scratch, α=0.1, reverse) oraz
+ablacja kierunku forward KL. Wyniki główne i walidacja niżej.
 
 ## Motywacja
 
@@ -81,7 +82,7 @@ luka między studentem a universalistą (który te dane widział) w każdej kom�
 | B | on-policy reverse KL, rotacja domena×zadanie | ZREALIZOWANY — wyniki niżej |
 | A | mixed SFT fine-tune, off-policy CE | ODRZUCONY jako kontrola: widzi surowe dane domen, więc nie odpowiada na pytanie second-hand; jego rolę pełni baseline universalisty |
 | A′ | off-policy distillation: KL α-miksowanego nauczyciela na PRAWDZIWYCH sekwencjach (teacher forcing) | zaproponowany — izoluje on-policy przy identycznym zestawie informacji |
-| C | on-policy forward KL (`--direction forward`), ta sama rotacja | otwarty — izoluje kierunek KL |
+| C | on-policy forward KL (`--direction forward`), ta sama rotacja | ZREALIZOWANY — ablacja niżej |
 
 ## Metryki
 
@@ -107,7 +108,9 @@ nauczycieli (specialist ceiling). RKL musiało:
 2. **Nie pogorszyć jig** (zapominanie domeny największej jakościowo),
 3. **Obniżyć home bias poza domeną** (słuchanie nagłówków).
 
-Wszystkie trzy spełnione w iteracji 2 — patrz Wyniki i Wnioski.
+Wszystkie trzy były spełnione w pierwotnej ocenie iteracji 2 — patrz Wyniki i Wnioski.
+Późniejszy rerun z walidacją ABC/MIDI pokazuje dodatkowo koszt w syntaktycznej
+poprawności ABC; interpretacja tego trade-offu znajduje się w sekcji rebenchmarku.
 
 ## Znane ryzyka
 
@@ -227,9 +230,10 @@ lekki spadek w domenie własnej (jig 0.63 vs 0.70 nauczyciela w continuation).
    studenta) rosnący + stabilna entropia = zdrowy przebieg; rosnąca entropia przy
    spadającym KL = spłaszczanie (sygnał do przerwania / zmiany α).
 
-**Otwarte:** forward KL (`--direction forward`) — izolacja kierunku KL; off-policy
-distillation (nauczyciel na prawdziwych sekwencjach) — izolacja on-policy; sensitivity
-α i top-k; odtworzenie checkpointu continuation-only dla pełnej tabeli abacyjnej.
+**Otwarte:** off-policy distillation (nauczyciel na prawdziwych sekwencjach) — izolacja
+on-policy; sensitivity α i top-k; odtworzenie checkpointu continuation-only dla pełnej
+tabeli abacyjnej. Forward KL został uruchomiony jako kontrola kierunku i jest opisany
+poniżej.
 
 **Zastrzeżenie (leak generatory↔val sędziego):** sędzia nie wycieka do treningu w żadnej
 formie (w `train_rkl.py` z `train_judge` importowane są tylko narzędzia danych; sygnał
@@ -258,3 +262,181 @@ Wyciek działa jak stała dopłatka do wyników każdego generatora, więc:
   i liczba epok na korpusie z wyciekiem różnią się między checkpointami) — wnioski
   oparte na dużych lukach (≥0.1, np. waltz 0.20→0.54) są bezpieczne; porównania na
   granicy szumu (±0.03–0.05) przy wycieku tracą jeszcze trochę wiarygodności.
+
+---
+
+## Plan stopniowego uwiarygodnienia eksperymentu
+
+Plan ma najpierw doprecyzować i ustabilizować obecny wynik, a dopiero później rozszerzać
+zakres tezy. Nie zmieniamy od razu eksperymentu w większy program badawczy.
+
+### Zakres tezy po doprecyzowaniu
+
+Najbezpieczniejsze twierdzenie brzmi:
+
+> On-policy multi-teacher KL post-training uczy wspólnego studenta warunkować generację
+> na jawnym promptcie metrum/tonacji i poprawia wynik OOD w zadaniu muzycznym.
+
+Trzy wyniki należy rozdzielać:
+
+- **scratch** — najczystszy test transferu z samych prawdopodobieństw nauczyciela oraz
+  nagłówków; podczas RKL nie ma prawdziwego prefiksu melodii;
+- **continuation** — transfer przy dodatkowym zakotwiczeniu w prawdziwym prefiksie melodii;
+  nie jest to transfer „bez danych wejściowych", bo student widzi ten prefiks;
+- **obecne domeny** — test sterowania stylem skojarzonym z metrum, nie test rozdzielenia
+  stylu od metrum.
+
+`M:` jest tu zamierzonym sygnałem sterującym, a nie błędem pomiaru. Ograniczenie polega
+na tym, że w obecnym układzie `M:6/8`, `M:4/4` i `M:3/4` prawie jednoznacznie wskazują
+odpowiednio jiga, reela i walca. Wynik pokazuje więc przede wszystkim nauczenie się
+warunkowania generacji na tym sygnale. Nie rozstrzyga jeszcze, czy student nauczył się
+reprezentacji stylu niezależnej od metrum.
+
+### Etap 1 — małe poprawki w kodzie i pomiarze
+
+1. **Sprawdzić i poprawić wyrównanie okien w `train_rkl.py`.** Przy 32 znakach kontekstu
+   pierwszą pozycję po kontekście przewiduje logit na pozycji 31. Obecne `lo=ctx_chars`
+   może pomijać jeden token w każdym kolejnym oknie.
+2. **Dodać walidację ABC/MIDI do benchmarku.** Obecny `benchmark_ood.py` sprawdza słownik
+   i minimalną długość ciała, ale nie parsuje wygenerowanego ABC. Raportować osobno:
+   odsetek poprawnie parsowalnych melodii, sukces konwersji do MIDI, błędy długości taktów
+   oraz score sędziego warunkowy na poprawnym parsowaniu.
+3. **Ustabilizować ewaluację.** Pule promptów są stałe, ale rollouty są losowe. Używać
+   kilku stałych seedów generacji i raportować średnią ± odchylenie, zamiast wybierać
+   checkpoint wyłącznie na podstawie jednego stochastycznego przebiegu.
+4. **Zapisywać metadane eksperymentu:** commit kodu, seed, checkpointy nauczycieli,
+   `alpha`, temperaturę, `top-k`, proporcję zadań, długość promptu, budżet iteracji
+   oraz hash słownika i danych.
+
+### Etap 2 — tanie ablacje
+
+5. **Uruchomić forward KL.** Kod już obsługuje `--direction forward`; identyczny budżet
+   pozwoli sprawdzić, czy efekt zależy konkretnie od reverse KL.
+6. **Uruchomić RKL tylko dla `scratch`.** Kod obsługuje `--tasks scratch`. To będzie
+   główny wariant dla twierdzenia o transferze „z drugiej ręki".
+7. **Porównać trzy warianty:** scratch-only, continuation-only oraz cont+scratch.
+   Dzięki temu będzie wiadomo, czy poprawa wynika z nauki obsługi nagłówków, z realnego
+   prefiksu, czy z ich połączenia.
+8. **Dodać kontrolę dodatkowego post-trainingu bez nauczyciela**, przy tym samym studencie,
+   promptach, liczbie iteracji i budżecie. Pozwoli to odróżnić efekt RKL od samego dalszego
+   treningu.
+9. **Powtórzyć główne warianty na co najmniej trzech seedach.** Wystarczy początkowo:
+   universalista, reverse-KL cont+scratch, forward-KL cont+scratch oraz reverse-KL
+   scratch-only.
+
+### Etap 3 — kontrola wycieku danych
+
+10. **Zbudować clean-room split generatorów.** Dodać do `prepare_data.py` możliwość
+    wykluczenia listy `tune_id` użytych w walidacji sędziego, a następnie przetrenować
+    universalistę i nauczycieli bez tych melodii.
+11. **Rozdzielić nazewnictwo wyników:** continuation opisywać jako „distillation z
+    prawdziwym prefiksem", a scratch jako „distillation z nagłówków i prawdopodobieństw
+    nauczyciela". To usuwa niejednoznaczność bez zmiany metody.
+
+### Etap 4 — dopiero później: test ponad routingiem po metrum
+
+12. **Użyć domen o tym samym metrum**, np. reel kontra hornpipe (4/4) albo waltz kontra
+    mazur (3/4), oraz dodać jawny identyfikator stylu, np. `D:reel`. Wtedy `M:` nie może
+    samo wybrać nauczyciela i będzie można sprawdzić, czy student przełącza styl, a nie
+    tylko kojarzy różne metra z różnymi ekspertami.
+
+Ten etap nie jest konieczny do obrony węższej tezy o prompt-conditioned generation.
+Jest konieczny dopiero dla mocniejszego twierdzenia o reprezentacji stylu niezależnej
+od metrum.
+
+### Priorytet
+
+Wyrównanie okien, walidacja ABC/MIDI oraz ablacja forward KL są wykonane. Następne
+priorytety to: stałe powtórzenia na kilku seedach → scratch-only i pozostałe ablacje →
+clean-room bez melodii walidacyjnych → domeny o wspólnym metrum. VQ/SAE, meta-atencja
+i pełny router nie są teraz potrzebne do uwiarygodnienia tego wyniku.
+
+### Interpretacja walidacji ABC/MIDI
+
+Benchmark raportuje teraz trzy rozdzielne własności wygenerowanego wyniku:
+
+- `score` pozostaje dotychczasowym wynikiem sędziego liczonym dla wszystkich żądanych
+  próbek; błędy słownika i zbyt krótkie ciała nadal obniżają go do zera i pozostają w
+  `invalid` oraz `coverage`;
+- `score_valid_abc` to ten sam wynik sędziego, ale warunkowo na próbkach, które dały się
+  ściśle sparsować jako ABC (`valid_abc_samples`); jeśli żadna taka próbka nie istnieje,
+  wynik ma wartość `null`;
+- `validation.sanitized_midi_ok` oznacza, że istniejąca ścieżka sanitizacji/naprawy ABC
+  zdołała wyrenderować MIDI. Nie oznacza to, że surowe ABC było poprawne — dlatego
+  `raw_abc_valid` i `sanitized_midi_ok` są raportowane osobno.
+
+Surowe ABC jest parsowane dokładnie w postaci pierwszej wygenerowanej melodii, bez
+sanitizacji. Błędy długości są liczone z tego właśnie, ściśle sparsowanego score'a:
+porównywana jest długość taktu z `barDuration`, z tolerancją `1e-6`. Pierwszy i ostatni
+takt każdej partii są wyłączone, ponieważ pickup oraz niepełne zakończenie są legalnymi
+wyjątkami; sprawdzane są wyłącznie wewnętrzne takty z dostępnym `barDuration`.
+
+W ten sposób ścisły błąd parsowania i sukces renderera naprawiającego zapis pozostają
+odrębnymi informacjami o generacji, a nie dwoma nazwami tej samej metryki.
+Pliki MIDI są tworzone w katalogu tymczasowym i usuwane po ocenie; benchmark nie zostawia
+artefaktów w repozytorium.
+
+### Rebenchmark: clean-data baseline, reverse KL i forward KL
+
+Po naprawieniu dekodowania pełnej sekwencji zwracanej przez `GPT.generate()` wykonano
+porównanie na tych samych ustawieniach benchmarku (`seed=42`, temperatura `0.85`,
+`top-k=18`, 420 nowych znaków, 100 próbek na komórkę):
+
+```text
+benchmark_ood.py --models clean_data_ckpt.pt student_clean_all_ckpt.pt \
+  student_clean_all_forward_ckpt.pt --quiet-validation-warnings
+```
+
+`clean_data_ckpt.pt` jest bazowym modelem bez RL, `student_clean_all_ckpt.pt` to
+student po reverse KL, a `student_clean_all_forward_ckpt.pt` to student po forward KL.
+W tym rerunie referencje sędziego wynosiły: jig `0.782`, reel `0.757`, waltz `0.584`.
+
+Średnie poniżej są prostą średnią z sześciu komórek (trzy metra × scratch/continuation),
+a nie średnią ważoną liczbą taktów:
+
+| model | score (wszystkie próbki) | score_valid_abc | raw ABC valid | MIDI sanitized | błędy taktów |
+|---|---:|---:|---:|---:|---:|
+| clean-data, bez RL | 0.533 | 0.561 | 92.3% | 92.5% | 3295 / 28316 = 11.6% |
+| reverse KL | 0.568 | 0.592 | 89.2% | 89.5% | 1353 / 26792 = 5.0% |
+| forward KL | 0.568 | 0.595 | 86.8% | 87.2% | 2350 / 26932 = 8.7% |
+
+Najważniejsze obserwacje:
+
+1. **Oba kierunki KL poprawiają wynik sędziego względem bazowego modelu**: średni
+   `score` rośnie z `0.533` do `0.568`. Reverse KL jest minimalnie lepszy w
+   continuation (`0.585` vs `0.576` dla forward KL), natomiast forward KL jest
+   minimalnie lepszy w scratch (`0.560` vs `0.551`). Ogólny wynik obu studentów jest
+   praktycznie remisowy.
+2. **Reverse KL daje najlepszą regularność rytmiczną.** Liczba błędnych taktów spada
+   z `11.6%` do `5.0%`; forward KL osiąga wynik pośredni (`8.7%`). Jest to osobna
+   własność od poprawności składni ABC: score może dać się sparsować, ale mieć
+   niepełne albo przepełnione takty.
+3. **Ścisła poprawność ABC nie poprawiła się.** Bazowy model ma `92.3%` surowo
+   parsowalnych melodii, reverse KL `89.2%`, a forward KL `86.8%`. Zatem w obecnym
+   ustawieniu posttraining poprawia jakość muzyczną i długość taktów kosztem części
+   syntaktycznej poprawności generowanego ABC.
+4. **Sanitizacja jest prawie bezczynna jako naprawa.** Różnica między `raw_abc_valid`
+   i `sanitized_midi_ok` wynosi tylko 1–2 próbki na 600. Sukces renderera należy więc
+   interpretować jako oddzielną informację o tolerancji ścieżki MIDI, a nie jako dowód,
+   że surowe ABC było poprawne.
+5. **Pokrycie nie jest źródłem różnic.** Dla wszystkich modeli scratch ma 100% pokrycia,
+   a continuation odpowiednio 99% dla jig, 93% dla reel i 83% dla waltz. Różnice w
+   `score` wynikają więc z generacji/judge'a, a nie z nowej walidacji ABC ani z
+   odrzucania próbek z powodu krótkiego ciała.
+6. **Największy zysk pozostaje w waltz**, gdzie wynik scratch rośnie z `0.270` do
+   `0.494` (reverse) i `0.497` (forward), a continuation z `0.415` do `0.448` i
+   `0.466`. Reel pozostaje prawie bez zmiany, a jig jest stabilny, choć continuation
+   studentów jest nieco niższe niż bazowe (`0.711`: `0.701` reverse, `0.684` forward).
+7. **Home-bias w continuation spada u studentów**, szczególnie po forward KL: dla jig
+   `0.87 → 0.82`, a dla waltz `0.18 → 0.14` (bazowy → forward). To jest zgodne z
+   lepszym reagowaniem na prompt, ale nie powinno być utożsamiane z poprawnością ABC.
+   W scratch home-bias jig pozostaje wysoki (`~0.92`) u obu studentów, co wskazuje na
+   utrzymanie silnego priora domenowego w tym kierunku.
+
+Ten rerun kwalifikuje wcześniejsze sformułowanie o pełnej „Pareto-dominacji” nad bazą:
+pozostaje ono prawdziwe dla wcześniejszej tabeli benchmarku i jej celu jakościowego,
+ale nie dla wszystkich nowych metryk ani dla każdego pojedynczego wyniku. W szczególności
+nowa walidacja pokazuje wyraźny trade-off: reverse KL jest najlepszy strukturalnie,
+forward KL ma najwyższy warunkowy `score_valid_abc`, lecz bazowy model ma najwyższą
+surową parsowalność ABC. Różnice rzędu `0.01–0.03` należy traktować ostrożnie przy
+pojedynczym seedzie i 100 próbkach na komórkę; potrzebne są powtórzenia na kilku seedach.

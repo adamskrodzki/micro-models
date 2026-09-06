@@ -67,7 +67,10 @@ def window_loss(seq, plen, student, teacher, t2s, alpha, direction, ctx, device,
         T = w.size(1)
         if T < 2:
             continue
-        lo = ctx_chars if s > 0 else 0            # w 1. oknie kontekstem jest sam prompt
+        # W kolejnych oknach pierwsze ctx_chars pozycji wejściowych to kontekst.
+        # Logit na pozycji ctx_chars - 1 przewiduje pierwszy token po tym
+        # kontekście, więc start od ctx_chars pomijałby jeden token celu.
+        lo = max(0, ctx_chars - 1) if s > 0 else 0
         p = torch.arange(lo, T - 1, device=device)  # lokalne pozycje logitów (predykcja p+1)
         g = s + p + 1                              # globalne indeksy znaków targetowych
         m = g >= plen                              # tylko wygenerowane znaki

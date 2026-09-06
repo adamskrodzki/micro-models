@@ -1,7 +1,7 @@
 """Trening GPT od zera na korpusie ABC (L03/L08 w praktyce).
 Batche -> strata cross-entropy -> backprop -> AdamW -> val loss -> checkpoint.
 """
-import os, time, math, sys, argparse
+import os, re, time, math, sys, argparse
 from contextlib import nullcontext
 import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,7 +43,7 @@ print(f"urządzenie: {device} | bf16: {use_bf16}")
 DATA, CKPT, LOSSLOG, VOCAB_FROM = a.data, a.ckpt, a.losslog, a.vocab_from
 print(f"dane: {DATA} -> checkpoint: {CKPT} | max_iters: {max_iters}")
 
-# --- dane: char-level ---
+# --- dane: char-level, okna per melodia (nigdy nie przekraczają granicy X:) ---
 text = open(DATA, encoding="utf-8").read()
 if VOCAB_FROM:
     vck = torch.load(VOCAB_FROM, map_location="cpu", weights_only=False)
@@ -54,16 +54,45 @@ else:
     chars = sorted(set(text))
     stoi = {c: i for i, c in enumerate(chars)}
     itos = {i: c for i, c in enumerate(chars)}
-data = torch.tensor([stoi[c] for c in text], dtype=torch.long)
-n = int(0.9 * len(data))
-train_data, val_data = data[:n], data[n:]
-print(f"słownik: {len(chars)} | tokeny: train {len(train_data):,} / val {len(val_data):,}")
+# pad: znak spoza korpusu (brak w ALLOWED); targety na padzie = -100 -> cross_entropy je ignoruje
+PAD_ID = stoi.get("\x00", len(itos))
+if "\x00" not in stoi:
+    stoi["\x00"] = PAD_ID
+    itos[PAD_ID] = "\x00"
+starts = [m.start() for m in re.finditer(r"(?m)^X:", text)]
+tunes = []
+for i, s in enumerate(starts):
+    e = starts[i + 1] if i + 1 < len(starts) else len(text)
+    tunes.append(torch.tensor([stoi[c] for c in text[s:e]], dtype=torch.long))
+perm = torch.randperm(len(tunes))                 # tasowanie melodii -> reprezentatywny val
+tunes = [tunes[j] for j in perm]
+n = int(0.9 * len(tunes))
+train_tunes, val_tunes = tunes[:n], tunes[n:]
+print(f"słownik: {len(itos)} | melodie: train {len(train_tunes)} / val {len(val_tunes)} | "
+      f"znaki: {sum(t.size(0) for t in tunes):,}")
 
 def get_batch(split):
-    d = train_data if split == "train" else val_data
-    ix = torch.randint(len(d) - block_size, (batch_size,))
-    x = torch.stack([d[i:i+block_size] for i in ix])
-    y = torch.stack([d[i+1:i+1+block_size] for i in ix])
+    pool = train_tunes if split == "train" else val_tunes
+    xs, ys = [], []
+    for _ in range(batch_size):
+        t = pool[torch.randint(len(pool), (1,)).item()]
+        L = t.size(0)
+        if L > block_size:                        # mieści pełne okno block_size+1
+            if torch.rand(1).item() < 0.25 or L == block_size + 1:
+                off = 0                           # 25% okien od nagłówka (X: na pozycji 0)
+            else:
+                off = int(torch.randint(1, L - block_size, (1,)).item())
+        else:
+            off = 0                               # krótka melodia: całość + pad
+        w = t[off:off + block_size + 1]           # +1 na przesunięte targety
+        if w.size(0) < block_size + 1:
+            pad = block_size + 1 - w.size(0)
+            w = torch.cat([w, torch.full((pad,), PAD_ID, dtype=torch.long)])
+        xs.append(w[:-1])
+        ys.append(w[1:])
+    x = torch.stack(xs)
+    y = torch.stack(ys)
+    y[y == PAD_ID] = -100                         # nie uczymy przewidywać padu
     return x.to(device), y.to(device)
 
 @torch.no_grad()
@@ -87,7 +116,7 @@ def lr_at(it):  # warmup + cosine decay (L08)
     r = (it - warmup) / (max_iters - warmup)
     return lr * 0.1 + 0.5 * lr * 0.9 * (1 + math.cos(math.pi * r))
 
-cfg = GPTConfig(vocab_size=len(chars), block_size=block_size,
+cfg = GPTConfig(vocab_size=len(itos), block_size=block_size,
                 n_layer=n_layer, n_head=n_head, n_embd=n_embd, dropout=dropout)
 model = GPT(cfg).to(device)
 print(f"parametry modelu: {model.num_params():,}")
